@@ -12,7 +12,7 @@ try {
   );
 } catch (err) {
   console.error("Failed to read service account key:", err);
-  process.exit(1); // Stop the server if the key is missing or invalid
+  process.exit(1);
 }
 
 admin.initializeApp({
@@ -23,18 +23,16 @@ const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Use Prerender token from Render environment variable
-if (!process.env.PRERENDER_TOKEN) {
-  console.warn("Warning: PRERENDER_TOKEN is not set");
-} else {
+// Prerender middleware
+if (process.env.PRERENDER_TOKEN) {
   prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
   app.use(prerender);
 }
 
-// Serve the React build folder
+// Serve React build
 app.use(express.static(path.join(__dirname, "build")));
 
-// Dynamic OG tag route for addToCart pages
+// Dynamic OG tag route
 app.get("/addToCart/:songId", async (req, res) => {
   const songId = req.params.songId;
   try {
@@ -50,14 +48,12 @@ app.get("/addToCart/:songId", async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>${song?.title || "Add to Cart"} | UrbeatHub</title>
 
-          <!-- Open Graph -->
           <meta property="og:title" content="${song?.title || "Add to Cart"}" />
           <meta property="og:description" content="Buy & download ${song?.title || "this beat"}" />
           <meta property="og:image" content="${song?.coverUrl || "https://urbeathub.com/default_og.png"}" />
           <meta property="og:url" content="https://urbeathub.com/addToCart/${songId}" />
           <meta property="og:type" content="music.song" />
 
-          <!-- Twitter -->
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content="${song?.title || "Add to Cart"}" />
           <meta name="twitter:description" content="Buy & download ${song?.title || "this beat"}" />
@@ -75,8 +71,8 @@ app.get("/addToCart/:songId", async (req, res) => {
   }
 });
 
-// Fallback route for React app – fixed wildcard
-app.get("*", (req, res) => {
+// Fallback route for React app – **fixed**
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
