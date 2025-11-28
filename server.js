@@ -5,7 +5,6 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 
 // Load Firebase service account key from Render secret
-// Make sure the secret file uploaded to Render is named "serviceAccountKey.json"
 const serviceAccount = JSON.parse(
   fs.readFileSync("/etc/secrets/serviceAccountKey.json", "utf8")
 );
@@ -66,9 +65,9 @@ app.get("/addToCart/:songId", async (req, res) => {
   }
 });
 
-// Fallback route for React app (Express v5 compatible)
-app.get("/:pathMatch(.*)*", (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+// Fallback route for React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
 app.listen(PORT, () => {
