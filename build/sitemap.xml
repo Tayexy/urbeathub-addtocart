@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- New Homepage -->
+  <url>
+    <loc>https://www.urbeathub.com/</loc>
+    <lastmod>2025-05-29</lastmod>
+    <priority>1.00</priority>
+  </url>
+
+  <!-- Start Selling Page -->
+  <url>
+    <loc>https://www.urbeathub.com/startsellingpage</loc>
+    <lastmod>2025-05-29</lastmod>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- Add more URLs here if needed -->
+</urlset>
