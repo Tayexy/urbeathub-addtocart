@@ -71,10 +71,11 @@ app.get("/addToCart/:songId", async (req, res) => {
   }
 });
 
-// Fallback route for React app – **fixed**
-app.get("/*", (req, res) => {
+// Fallback route for React app – fixed for older router/path-to-regexp
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
