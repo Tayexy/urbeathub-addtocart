@@ -5,9 +5,15 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 
 // Load Firebase service account key from Render secret
-const serviceAccount = JSON.parse(
-  fs.readFileSync("/etc/secrets/serviceAccountKey.json", "utf8")
-);
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(
+    fs.readFileSync("/etc/secrets/serviceAccountKey.json", "utf8")
+  );
+} catch (err) {
+  console.error("Failed to read service account key:", err);
+  process.exit(1); // Stop the server if the key is missing or invalid
+}
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -18,8 +24,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Use Prerender token from Render environment variable
-prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
-app.use(prerender);
+if (!process.env.PRERENDER_TOKEN) {
+  console.warn("Warning: PRERENDER_TOKEN is not set");
+} else {
+  prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
+  app.use(prerender);
+}
 
 // Serve the React build folder
 app.use(express.static(path.join(__dirname, "build")));
@@ -65,9 +75,9 @@ app.get("/addToCart/:songId", async (req, res) => {
   }
 });
 
-// Fallback route for React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+// Fallback route for React app – fixed wildcard
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
 app.listen(PORT, () => {
