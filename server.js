@@ -44,7 +44,7 @@ function loadIndexHtml() {
   }
 }
 
-// ----- Dynamic OG tags route -----
+// ----- Dynamic OG tags route (matches App.js: /addToCart/:slug) -----
 app.get("/addToCart/:slug", async (req, res) => {
   const slug = req.params.slug;
 
@@ -64,7 +64,6 @@ app.get("/addToCart/:slug", async (req, res) => {
     const songSnap = await songRef.get();
     const song = songSnap.exists ? songSnap.data() : null;
 
-    // Safe fallbacks
     const title = song?.title || "Beat Not Found";
     const description = song
       ? `Buy & download ${song.title}`
@@ -102,8 +101,8 @@ app.get("/addToCart/:slug", async (req, res) => {
   }
 });
 
-// ----- SPA fallback -----
-app.get("*", (req, res) => {
+// ----- SPA fallback (regex safe for Express 5+) -----
+app.get(/.*/, (req, res) => {
   const baseHtml = loadIndexHtml();
   if (!baseHtml) {
     return res.status(500).send("Server HTML not available");
