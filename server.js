@@ -1,93 +1,104 @@
 const express = require("express");
 const path = require("path");
-const prerender = require("prerender-node");
-const admin = require("firebase-admin");
 const fs = require("fs");
+const admin = require("firebase-admin");
+const dotenv = require("dotenv");
+dotenv.config();
 
-// Load Firebase service account key from Render secret
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(
-    fs.readFileSync("/etc/secrets/serviceAccountKey.json", "utf8")
-  );
-} catch (err) {
-  console.error("Failed to read service account key:", err);
-  process.exit(1);
-}
+const app = express();
+
+// ----- FIREBASE ADMIN INIT -----
+const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
-const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Prerender middleware
-if (process.env.PRERENDER_TOKEN) {
-  prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
-  app.use(prerender);
-}
+// ----- PRERENDER SETUP -----
+app.use(require("prerender-node").set("prerenderToken", process.env.PRERENDER_TOKEN));
 
-// Serve React build
-const buildPath = path.join(__dirname, "build");
-app.use(express.static(buildPath));
+// Serve the React build folder
+app.use(express.static(path.join(__dirname, "build")));
 
 
-// ⭐⭐⭐ Dynamic OG tag handler
+// ===============================
+//  🔥 OG TAG ROUTE FOR SHARE LINKS
+// ===============================
 app.get("/addToCart/:slugId", async (req, res) => {
   const slugId = req.params.slugId;
 
-  // Get Firestore ID (last part of slug)
+  // extract Firestore ID: last element after splitting by "-"
   const parts = slugId.split("-");
   const songId = parts[parts.length - 1];
 
   try {
-    const snap = await db.collection("beats").doc(songId).get();
-    const song = snap.exists ? snap.data() : null;
+    const songRef = db.collection("beats").doc(songId);
+    const songSnap = await songRef.get();
+    const song = songSnap.exists ? songSnap.data() : null;
 
-    // Load React index.html
-    let indexHTML = fs.readFileSync(path.join(buildPath, "index.html"), "utf8");
+    // Read actual React build index.html
+    const indexHtml = fs.readFileSync(
+      path.join(__dirname, "build", "index.html"),
+      "utf8"
+    );
 
+    // If beat not found → still load React + safe OG tags
     if (!song) {
-      indexHTML = indexHTML.replace("<head>", `
-        <head>
-          <meta property="og:title" content="Beat Not Found" />
-          <meta property="og:description" content="This beat no longer exists." />
-          <meta property="og:image" content="https://urbeathub.com/default_og.png" />
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+            <meta property="og:title" content="Beat Not Found" />
+            <meta property="og:description" content="This beat may have been removed." />
+            <meta property="og:image" content="https://urbeathub.com/default_og.png" />
+          </head>
+          <body>
+            ${indexHtml}
+          </body>
+        </html>
       `);
-      return res.send(indexHTML);
     }
 
-    // Inject OG tags into <head>
-    indexHTML = indexHTML.replace("<head>", `
-      <head>
-        <meta property="og:title" content="${song.title}" />
-        <meta property="og:description" content="Buy & download ${song.title}" />
-        <meta property="og:image" content="${song.coverUrl}" />
-        <meta property="og:url" content="https://urbeathub.com/addToCart/${slugId}" />
-        <meta property="og:type" content="music.song" />
+    // OG TAG PAGE + React App
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="${song.title}" />
-        <meta name="twitter:description" content="Buy & download ${song.title}" />
-        <meta name="twitter:image" content="${song.coverUrl}" />
+          <meta property="og:title" content="${song.title}" />
+          <meta property="og:description" content="Buy & download ${song.title} on UrBeatHub" />
+          <meta property="og:image" content="${song.coverUrl}" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+        </head>
+
+        <body>
+          ${indexHtml}
+        </body>
+      </html>
     `);
-
-    return res.send(indexHTML);
-
   } catch (err) {
-    console.error(err);
+    console.error("OG Route Error:", err);
     return res.status(500).send("Internal Server Error");
   }
 });
 
 
-// Fallback — load React SPA
+// =======================================
+//  🔥 FIXED FALLBACK (Express v5 compatible)
+// =======================================
 app.get("*", (req, res) => {
-  res.sendFile(path.join(buildPath, "index.html"));
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+// ----- START SERVER -----
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
