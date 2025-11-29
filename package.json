@@ -1,23 +1,18 @@
 {
-  "name": "urbeathub-addtocart",
+  "name": "prerender",
   "version": "1.0.0",
-  "description": "UrbeatHub add-to-cart React app with Express server",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "react-scripts build",
-    "postinstall": "npm run build"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
   "dependencies": {
-    "express": "^4.18.2",
-    "firebase-admin": "^11.11.0",
-    "prerender-node": "^3.2.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1"
-  },
-  "engines": {
-    "node": "22.x"
-  },
-  "private": true
+    "express": "^5.1.0",
+    "firebase-admin": "^13.6.0",
+    "prerender-node": "^3.8.3"
+  }
 }
