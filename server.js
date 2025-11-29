@@ -29,19 +29,15 @@ if (process.env.PRERENDER_TOKEN) {
   app.use(prerender);
 }
 
-// Serve React build folder
-app.use(express.static(path.join(__dirname, "build")));
+// Serve React build (in root /build)
+const buildPath = path.join(__dirname, "build");
+app.use(express.static(buildPath));
 
-
-// ⭐⭐⭐ Dynamic OG tag with SLUG + ID support
+// Dynamic OG Tag Route
 app.get("/addToCart/:slugId", async (req, res) => {
   const slugId = req.params.slugId;
-
-  // Extract Firestore ID from slug (last part after last dash)
   const parts = slugId.split("-");
   const songId = parts[parts.length - 1];
-
-  console.log("Extracted Song ID:", songId);
 
   try {
     const songRef = db.collection("beats").doc(songId);
@@ -93,10 +89,9 @@ app.get("/addToCart/:slugId", async (req, res) => {
   }
 });
 
-
-// Fallback — send React SPA
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+// Catch-all route to serve React app for all other paths
+app.get("*", (req, res) => {
+  res.sendFile(path.join(buildPath, "index.html"));
 });
 
 app.listen(PORT, () => {
