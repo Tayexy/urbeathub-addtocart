@@ -23,20 +23,20 @@ const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Prerender middleware
+// Prerender middleware for SEO / social bots
 if (process.env.PRERENDER_TOKEN) {
   prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
   app.use(prerender);
 }
 
-// Serve React build
+// Serve React static build
 app.use(express.static(path.join(__dirname, "build")));
 
-// Dynamic OG Tag Route
+// Dynamic OG Route for beats
 app.get("/addToCart/:slugId", async (req, res) => {
   const slugId = req.params.slugId;
 
-  // Extract Firestore ID 
+  // Extract Firestore ID from slug
   const parts = slugId.split("-");
   const songId = parts[parts.length - 1];
 
@@ -45,38 +45,37 @@ app.get("/addToCart/:slugId", async (req, res) => {
     const songSnap = await songRef.get();
     const song = songSnap.exists ? songSnap.data() : null;
 
-    if (!song) {
-      return res.send(`
-        <html>
-          <head>
-            <meta property="og:title" content="Beat Not Found" />
-            <meta property="og:description" content="This beat no longer exists." />
-            <meta property="og:image" content="https://urbeathub.com/default_og.png" />
-          </head>
-        </html>
-      `);
-    }
+    // Default OG if beat not found
+    const ogTitle = song ? song.title : "Beat Not Found";
+    const ogDescription = song
+      ? `Buy & download ${song.title}`
+      : "This beat no longer exists.";
+    const ogImage = song
+      ? song.coverUrl
+      : "https://urbeathub.com/default_og.png";
+    const ogUrl = `https://urbeathub.com/addToCart/${slugId}`;
 
+    // Send dynamic OG HTML but include React root
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>${song.title} | UrbeatHub</title>
+          <title>${ogTitle} | UrbeatHub</title>
 
           <!-- Open Graph -->
-          <meta property="og:title" content="${song.title}" />
-          <meta property="og:description" content="Buy & download ${song.title}" />
-          <meta property="og:image" content="${song.coverUrl}" />
-          <meta property="og:url" content="https://urbeathub.com/addToCart/${slugId}" />
+          <meta property="og:title" content="${ogTitle}" />
+          <meta property="og:description" content="${ogDescription}" />
+          <meta property="og:image" content="${ogImage}" />
+          <meta property="og:url" content="${ogUrl}" />
           <meta property="og:type" content="music.song" />
 
           <!-- Twitter -->
           <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="${song.title}" />
-          <meta name="twitter:description" content="Buy & download ${song.title}" />
-          <meta name="twitter:image" content="${song.coverUrl}" />
+          <meta name="twitter:title" content="${ogTitle}" />
+          <meta name="twitter:description" content="${ogDescription}" />
+          <meta name="twitter:image" content="${ogImage}" />
         </head>
         <body>
           <div id="root"></div>
@@ -90,8 +89,8 @@ app.get("/addToCart/:slugId", async (req, res) => {
   }
 });
 
-// 💥 FIXED FALLBACK FOR NODE 22
-app.get(/.*/, (req, res) => {
+// SPA fallback: all other routes serve React index.html
+app.get(/^(?!\/addToCart\/).*$/, (req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
