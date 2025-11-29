@@ -4,7 +4,7 @@ const prerender = require("prerender-node");
 const admin = require("firebase-admin");
 const fs = require("fs");
 
-// Load Firebase service account key from Render secret
+// ----- Load Firebase service account key -----
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(
@@ -23,80 +23,93 @@ const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Prerender middleware
+// ----- Prerender middleware -----
 if (process.env.PRERENDER_TOKEN) {
   prerender.set("prerenderToken", process.env.PRERENDER_TOKEN);
   app.use(prerender);
 }
 
-// Serve React build folder
-app.use(express.static(path.join(__dirname, "build")));
+// ----- Serve React build assets -----
+const BUILD_DIR = path.join(__dirname, "build");
+app.use(express.static(BUILD_DIR, { maxAge: "1y", index: false }));
 
+// Helper to load index.html
+function loadIndexHtml() {
+  const indexPath = path.join(BUILD_DIR, "index.html");
+  try {
+    return fs.readFileSync(indexPath, "utf8");
+  } catch (e) {
+    console.error("Failed to read build/index.html. Did you run `npm run build`?", e);
+    return null;
+  }
+}
 
-// ⭐⭐⭐ Dynamic OG tag with SLUG + ID support
-app.get("/addToCart/:slugId", async (req, res) => {
-  const slugId = req.params.slugId;
+// ----- Dynamic OG tags route -----
+app.get("/addToCart/:slug", async (req, res) => {
+  const slug = req.params.slug;
 
-  // Extract Firestore ID from slug (last part after last dash)
-  const parts = slugId.split("-");
+  // Extract Firestore ID (last part after dash)
+  const parts = slug.split("-");
   const songId = parts[parts.length - 1];
 
   console.log("Extracted Song ID:", songId);
+
+  const baseHtml = loadIndexHtml();
+  if (!baseHtml) {
+    return res.status(500).send("Server HTML not available");
+  }
 
   try {
     const songRef = db.collection("beats").doc(songId);
     const songSnap = await songRef.get();
     const song = songSnap.exists ? songSnap.data() : null;
 
-    if (!song) {
-      return res.send(`
-        <html>
-          <head>
-            <meta property="og:title" content="Beat Not Found" />
-            <meta property="og:description" content="This beat no longer exists." />
-            <meta property="og:image" content="https://urbeathub.com/default_og.png" />
-          </head>
-        </html>
-      `);
-    }
+    // Safe fallbacks
+    const title = song?.title || "Beat Not Found";
+    const description = song
+      ? `Buy & download ${song.title}`
+      : "This beat no longer exists.";
+    const image = song?.coverUrl || "https://urbeathub.com/default_og.png";
+    const url = `https://urbeathub.com/addToCart/${slug}`;
 
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>${song.title} | UrbeatHub</title>
+    // Inject tags before </head>
+    const injectedHtml = baseHtml.replace(
+      "</head>",
+      `
+      <title>${title} | UrbeatHub</title>
 
-          <!-- Open Graph -->
-          <meta property="og:title" content="${song.title}" />
-          <meta property="og:description" content="Buy & download ${song.title}" />
-          <meta property="og:image" content="${song.coverUrl}" />
-          <meta property="og:url" content="https://urbeathub.com/addToCart/${slugId}" />
-          <meta property="og:type" content="music.song" />
+      <!-- Open Graph -->
+      <meta property="og:title" content="${title}" />
+      <meta property="og:description" content="${description}" />
+      <meta property="og:image" content="${image}" />
+      <meta property="og:url" content="${url}" />
+      <meta property="og:type" content="music.song" />
 
-          <!-- Twitter -->
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="${song.title}" />
-          <meta name="twitter:description" content="Buy & download ${song.title}" />
-          <meta name="twitter:image" content="${song.coverUrl}" />
-        </head>
-        <body>
-          <div id="root"></div>
-          <script src="/static/js/bundle.js"></script>
-        </body>
-      </html>
-    `);
+      <!-- Twitter -->
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="${title}" />
+      <meta name="twitter:description" content="${description}" />
+      <meta name="twitter:image" content="${image}" />
+
+      </head>`
+    );
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.send(injectedHtml);
   } catch (err) {
     console.error("Error fetching song:", err);
     return res.status(500).send("Internal Server Error");
   }
 });
 
-
-// Fallback — send React SPA
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+// ----- SPA fallback -----
+app.get("*", (req, res) => {
+  const baseHtml = loadIndexHtml();
+  if (!baseHtml) {
+    return res.status(500).send("Server HTML not available");
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.send(baseHtml);
 });
 
 app.listen(PORT, () => {
