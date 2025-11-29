@@ -29,74 +29,63 @@ if (process.env.PRERENDER_TOKEN) {
   app.use(prerender);
 }
 
-// Serve React build folder
-app.use(express.static(path.join(__dirname, "build")));
+// Serve React build
+const buildPath = path.join(__dirname, "build");
+app.use(express.static(buildPath));
 
 
-// ⭐⭐⭐ Dynamic OG tag with SLUG + ID support
+// ⭐⭐⭐ Dynamic OG tag handler
 app.get("/addToCart/:slugId", async (req, res) => {
   const slugId = req.params.slugId;
 
-  // Extract Firestore ID from slug (last part after last dash)
+  // Get Firestore ID (last part of slug)
   const parts = slugId.split("-");
   const songId = parts[parts.length - 1];
 
-  console.log("Extracted Song ID:", songId);
-
   try {
-    const songRef = db.collection("beats").doc(songId);
-    const songSnap = await songRef.get();
-    const song = songSnap.exists ? songSnap.data() : null;
+    const snap = await db.collection("beats").doc(songId).get();
+    const song = snap.exists ? snap.data() : null;
+
+    // Load React index.html
+    let indexHTML = fs.readFileSync(path.join(buildPath, "index.html"), "utf8");
 
     if (!song) {
-      return res.send(`
-        <html>
-          <head>
-            <meta property="og:title" content="Beat Not Found" />
-            <meta property="og:description" content="This beat no longer exists." />
-            <meta property="og:image" content="https://urbeathub.com/default_og.png" />
-          </head>
-        </html>
+      indexHTML = indexHTML.replace("<head>", `
+        <head>
+          <meta property="og:title" content="Beat Not Found" />
+          <meta property="og:description" content="This beat no longer exists." />
+          <meta property="og:image" content="https://urbeathub.com/default_og.png" />
       `);
+      return res.send(indexHTML);
     }
 
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>${song.title} | UrbeatHub</title>
+    // Inject OG tags into <head>
+    indexHTML = indexHTML.replace("<head>", `
+      <head>
+        <meta property="og:title" content="${song.title}" />
+        <meta property="og:description" content="Buy & download ${song.title}" />
+        <meta property="og:image" content="${song.coverUrl}" />
+        <meta property="og:url" content="https://urbeathub.com/addToCart/${slugId}" />
+        <meta property="og:type" content="music.song" />
 
-          <!-- Open Graph -->
-          <meta property="og:title" content="${song.title}" />
-          <meta property="og:description" content="Buy & download ${song.title}" />
-          <meta property="og:image" content="${song.coverUrl}" />
-          <meta property="og:url" content="https://urbeathub.com/addToCart/${slugId}" />
-          <meta property="og:type" content="music.song" />
-
-          <!-- Twitter -->
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="${song.title}" />
-          <meta name="twitter:description" content="Buy & download ${song.title}" />
-          <meta name="twitter:image" content="${song.coverUrl}" />
-        </head>
-        <body>
-          <div id="root"></div>
-          <script src="/static/js/bundle.js"></script>
-        </body>
-      </html>
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="${song.title}" />
+        <meta name="twitter:description" content="Buy & download ${song.title}" />
+        <meta name="twitter:image" content="${song.coverUrl}" />
     `);
+
+    return res.send(indexHTML);
+
   } catch (err) {
-    console.error("Error fetching song:", err);
+    console.error(err);
     return res.status(500).send("Internal Server Error");
   }
 });
 
 
-// Fallback — send React SPA
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
+// Fallback — load React SPA
+app.get("*", (req, res) => {
+  res.sendFile(path.join(buildPath, "index.html"));
 });
 
 app.listen(PORT, () => {
